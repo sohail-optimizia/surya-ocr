@@ -394,7 +394,7 @@ def dump_to_odoo(organized_data):
     except Exception as e:
         print(f"Failed to create invoice '{invoice_header['invoice_number']}': {str(e)}")
 
-openai.api_key = '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'
+openai.api_key = ''
 
 # def organize_invoice_data(invoice_data):
 #     print("invoice_data", invoice_data)
