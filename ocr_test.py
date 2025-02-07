@@ -22,6 +22,7 @@ from surya.input.langs import replace_lang_with_code
 from surya.schema import OCRResult
 import xmlrpc.client as xmlrpclib
 from datetime import datetime
+from google import genai
 import openai
 
 parser = argparse.ArgumentParser(description="Run OCR on an image or PDF.")
@@ -224,10 +225,10 @@ languages = st.sidebar.multiselect(
 )
 
 # Odoo configurations
-ODOO_URL = 'https://odoo.itrivers.com'
-ODOO_DB = 'restaurant'
-ODOO_USERNAME = 'demo@itrivers.sa'
-ODOO_PASSWORD = 'demo@@'
+ODOO_URL = 'https://students8.odoo.com/'
+ODOO_DB = 'students8'
+ODOO_USERNAME = 'malik.faizan@optimizia.co'
+ODOO_PASSWORD = 'Cancel123@@'
 ODOO_MODEL = 'account.move'  # Model name for invoices
 
 # Connect to Odoo
@@ -246,18 +247,27 @@ def record_exists_odoo(data):
     existing_record_ids = search_existing_record(search_domain)
     return len(existing_record_ids) > 0
 
+def parse_date(date_str):
+    possible_formats = ['%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y']
+    for fmt in possible_formats:
+        try:
+            return datetime.strptime(date_str, fmt).strftime('%Y-%m-%d')
+        except ValueError:
+            continue
+    return None  # If all formats fail, return None
+
 def dump_to_odoo(organized_data):
-    models = xmlrpclib.ServerProxy('{}/xmlrpc/2/object'.format(ODOO_URL))
-    
-    invoice_header = organized_data['organized_data']['invoice_header']
+    models = xmlrpclib.ServerProxy('{}/xmlrpc/2/object'.format(ODOO_URL), allow_none=True)
+    print("organized_data", organized_data['invoice_header'])
+    invoice_header = organized_data['invoice_header']
     customer = invoice_header['customer']
     supplier = invoice_header['supplier']
-    items = organized_data['organized_data']['items']
+    items = organized_data['items']
     notes = invoice_header.get('notes', '')
 
     required_fields = ['invoice_number', 'invoice_date', 'customer', 'supplier', 'items']
     for field in required_fields:
-        if not invoice_header.get(field) and not organized_data['organized_data'].get(field):
+        if not invoice_header.get(field) and not organized_data.get(field):
             print(f"Error: Missing required field '{field}'")
             return
 
@@ -302,19 +312,31 @@ def dump_to_odoo(organized_data):
     invoice_lines = []
     for item in items:
         product_name = item.get('name')
-        product_quantity = item.get('quantity')
+        product_quantity = item.get('quantity', 1)  # Default to 1 if missing
         unit_price = item.get('unit_price')
 
-        if not product_name or not product_quantity or not unit_price:
+        if not product_name or not unit_price:
             print(f"Warning: Incomplete item information: {item}. Skipping...")
             continue
 
-        # Remove commas and convert to float
+        # Ensure product_quantity is a valid number
         try:
-            unit_price = float(unit_price.replace(',', ''))
+            product_quantity = float(product_quantity) if product_quantity else 1  # Ensure it's a number
         except ValueError:
-            print(f"Error: Unable to convert unit_price to float for item: {product_name}. Skipping...")
-            continue
+            product_quantity = 1  # Default to 1 if conversion fails
+
+        # Remove commas and convert unit_price to float
+        try:
+            if isinstance(unit_price, str):
+                unit_price = float(unit_price.replace(',', ''))
+            elif isinstance(unit_price, (int, float)):
+                # If it's already a float or int, no need to replace commas
+                unit_price = float(unit_price)
+            else:
+                raise ValueError("unit_price must be a string, int, or float")        
+        except ValueError:
+                    print(f"Error: Unable to convert unit_price to float for item: {product_name}. Skipping...")
+                    continue
 
         product_data = {
             "name": product_name,
@@ -334,7 +356,8 @@ def dump_to_odoo(organized_data):
         }])
 
     try:
-        invoice_date = datetime.strptime(invoice_header['invoice_date'], '%d/%m/%Y').strftime('%Y-%m-%d')
+        # invoice_date = datetime.strptime(invoice_header['invoice_date'], '%d/%m/%Y').strftime('%Y-%m-%d')
+        invoice_date = parse_date(invoice_header.get('invoice_date'))
     except ValueError:
         print("Error: Invalid invoice date format.")
         return
@@ -371,10 +394,75 @@ def dump_to_odoo(organized_data):
     except Exception as e:
         print(f"Failed to create invoice '{invoice_header['invoice_number']}': {str(e)}")
 
-openai.api_key = 'sk-proj-ghCrhX4iHoAPhfkKC02LT3BlbkFJ3ntAlXTQQiA5mzbQ3Stp'
+openai.api_key = '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'
+
+# def organize_invoice_data(invoice_data):
+#     print("invoice_data", invoice_data)
+#     json_template = """{
+#         "organized_data": {
+#             "invoice_header": {
+#                 "bank": {
+#                     "iban": "",
+#                     "name": ""
+#                 },
+#                 "customer": {
+#                     "name": "",
+#                     "phone": "",
+#                     "vat_number": ""
+#                 },
+#                 "due_date": "",
+#                 "invoice_date": "",
+#                 "invoice_number": "",
+#                 "notes": "",
+#                 "supplier": {
+#                     "address": "",
+#                     "email": "",
+#                     "name": "",
+#                     "phone": "",
+#                     "vat_number": ""
+#                 }
+#             },
+#             "items": [
+#                 {
+#                     "name": "",
+#                     "quantity": "",
+#                     "unit_price": ""
+#                 }
+#             ],
+#             "totals": {
+#                 "subtotal": "",
+#                 "total_amount_due": "",
+#                 "total_taxable_amount": "",
+#                 "total_vat": ""
+#             }
+#         }
+#     }"""
+
+#     prompt = f"""
+#     Organize the following invoice data into a structured format and return only json:
+
+#     Invoice Data: {json.dumps(invoice_data)}
+
+#     """
+
+#     # Provide the organized data in JSON format follow this structure:
+#     # {json_template}
+
+#     response = openai.ChatCompletion.create(
+#     model="gpt-4o-mini", #gpt-3.5-turbo
+#     messages=[
+#         # {"role": "system", "content": "You are a helpful assistant."},
+#         {"role": "user", "content": prompt}
+#     ]
+#     )
+#     print(response['choices'][0]['message']['content'])
+
+#     organized_data = response['choices'][0]['message']['content']
+#     return json.loads(organized_data)
 
 def organize_invoice_data(invoice_data):
     print("invoice_data", invoice_data)
+    
     json_template = """{
         "organized_data": {
             "invoice_header": {
@@ -416,26 +504,40 @@ def organize_invoice_data(invoice_data):
     }"""
 
     prompt = f"""
-    Organize the following invoice data into a structured format and return only json:
-
+    Organize the following invoice data into a structured format like this {json_template} also check for data types and return only json do not add ''' and json:
+    
     Invoice Data: {json.dumps(invoice_data)}
 
-    """
-
-    # Provide the organized data in JSON format follow this structure:
-    # {json_template}
-
-    response = openai.ChatCompletion.create(
-    model="gpt-4o", #gpt-3.5-turbo
-    messages=[
-        # {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": prompt}
-    ]
+    """  
+    
+    # Initialize the Gemini client
+    client = genai.Client(api_key="AIzaSyCMJEALd5cy9KPlwjBgHN5u1Lll8nWgjfc")
+    
+    # Request to Gemini API for organizing the invoice data
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",  # Use the appropriate model
+        contents=prompt  # Send the prompt to the API
     )
-    print(response['choices'][0]['message']['content'])
 
-    organized_data = response['choices'][0]['message']['content']
-    return json.loads(organized_data)
+    # Clean the response text by stripping unwanted spaces, newlines, and "```json"
+    response_text = response.text.strip()
+
+    # Remove the unwanted "```json" and other unwanted characters (if present)
+    if response_text.startswith("```json"):
+        response_text = response_text[len("```json"):].strip()  # Remove the "```json" part
+    if response_text.endswith("```"):
+        response_text = response_text[:-3].strip()  # Remove the ending "```" part
+    
+    # Print the cleaned raw response for debugging
+    print("Cleaned raw response:", response_text)
+    
+    # Try to parse the cleaned response text into JSON
+    try:
+        organized_data = json.loads(response_text)  # Now it should parse correctly
+        return organized_data
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse response as JSON: {e}")
+        return None
 
 # Streamlit code to add a button to set the folder path and process files
 if st.sidebar.button("Use Default Folder Path"):
@@ -462,7 +564,7 @@ if st.sidebar.button("Use Default Folder Path"):
                 st.error(f"Error: {gemini_result['error']}")
             else:
                 st.subheader("Organized Data")
-                # dump_to_odoo(gemini_result['organized_data'])
+                dump_to_odoo(gemini_result['organized_data'])
                 st.json(gemini_result['organized_data'])
         else:
             if result.get("ocr"):
@@ -502,17 +604,17 @@ if st.sidebar.button("Use Default Folder Path"):
 
 
 
-def translateContent(data):
+# def translateContent(data):
     
-    response = openai.ChatCompletion.create(
-    model="gpt-4o", #gpt-3.5-turbo
-    messages=[
-        # {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": prompt}
-    ]
-    )
-    print(response['choices'][0]['message']['content'])
+#     response = openai.ChatCompletion.create(
+#     model="gpt-4o", #gpt-3.5-turbo
+#     messages=[
+#         # {"role": "system", "content": "You are a helpful assistant."},
+#         {"role": "user", "content": prompt}
+#     ]
+#     )
+#     print(response['choices'][0]['message']['content'])
 
-    translated_data = response['choices'][0]['message']['content']
-    return json.loads(translated_data)
+#     translated_data = response['choices'][0]['message']['content']
+#     return json.loads(translated_data)
     
