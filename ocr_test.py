@@ -218,12 +218,6 @@ def ocr_results_to_json(results):
 
 st.title("Surya OCR Application")
 
-languages = st.sidebar.multiselect(
-    "Select OCR languages",
-    options=list(CODE_TO_LANGUAGE.keys()),
-    default=["en"]
-)
-
 # Odoo configurations
 ODOO_URL = 'https://students8.odoo.com/'
 ODOO_DB = 'students8'
@@ -539,19 +533,40 @@ def organize_invoice_data(invoice_data):
         print(f"Failed to parse response as JSON: {e}")
         return None
 
-# Streamlit code to add a button to set the folder path and process files
-if st.sidebar.button("Use Default Folder Path"):
-    folder_path = os.path.join(os.getcwd(), "./invoices")
-    
-    # List files with extensions .pdf, .jpg, .jpeg, .png
-    files = [
-        os.path.join(folder_path, f) 
-        for f in os.listdir(folder_path) 
-        if f.lower().endswith((".pdf", ".jpg", ".jpeg", ".png"))
-    ]
-    
-    # Process each file
-    results = [process_file(file, languages) for file in files]
+# File uploader
+in_files = st.sidebar.file_uploader(
+    "PDF file(s) or image(s):", 
+    type=["pdf", "png", "jpg", "jpeg", "gif", "webp"], 
+    accept_multiple_files=True
+)
+
+# Language selection
+languages = st.sidebar.multiselect(
+    "Languages", 
+    sorted(list(CODE_TO_LANGUAGE.values())), 
+    default=["English"], 
+    max_selections=4
+)
+
+# Stop execution if no files are uploaded
+if not in_files:
+    st.stop()
+
+# Buttons for different processing tasks
+text_rec = st.sidebar.button("Run OCR")
+
+if text_rec:  # Only run when 'Run OCR' button is clicked
+    # Process uploaded files
+    results = []
+    for in_file in in_files:
+        # Save uploaded file to temporary storage
+        file_path = os.path.join("./temp_uploads", in_file.name)
+        with open(file_path, "wb") as f:
+            f.write(in_file.read())
+        
+        # Process the file
+        result = process_file(file_path, languages)
+        results.append(result)
 
     # Display results
     for result in results:
@@ -574,13 +589,13 @@ if st.sidebar.button("Use Default Folder Path"):
                 
                 # Combine OCR text for organizing
                 combined_ocr_text = "\n".join(line.text for line in result["ocr"].text_lines)
+                
                 # Organize the OCR text using Gemini API
                 gemini_result = organize_invoice_data(combined_ocr_text)
                 if "error" in gemini_result:
                     st.error(f"Error: {gemini_result['error']}")
                 else:
                     st.subheader("Organized Data")
-                    # dump_to_odoo(gemini_result['organized_data'])
                     st.json(gemini_result['organized_data'])
 
 

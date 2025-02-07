@@ -15,11 +15,12 @@ digitsNum = re.compile(r'\b\d+\b')
 email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
 
 # Odoo configurations
-ODOO_URL = 'https://odoo.itrivers.com' #/https://devo-optimizia.odoo.com
-ODOO_DB = 'restaurant' #devo-optimizia
-ODOO_USERNAME = 'demo@itrivers.sa' #developer@optimizia.co
-ODOO_PASSWORD = 'demo@@' #cANCEL123@@
-ODOO_MODEL = 'account.move'  # Replace 'your_model_name' with the actual model name
+ODOO_URL = 'https://students8.odoo.com/'
+ODOO_DB = 'students8'
+ODOO_USERNAME = 'malik.faizan@optimizia.co'
+ODOO_PASSWORD = 'Cancel123@@'
+ODOO_MODEL = 'account.move'  # Model name for invoices
+
 
 # Connect to Odoo
 common = xmlrpclib.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL))
