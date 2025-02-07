@@ -498,7 +498,7 @@ def organize_invoice_data(invoice_data):
     }"""
 
     prompt = f"""
-    Organize the following invoice data into a structured format like this {json_template} also check for data types and return only json do not add ''' and json:
+    Organize the following invoice data into a structured format and date formate should be dd/mm/yyyy like this {json_template} also check for data types and return only json do not add ''' and json:
     
     Invoice Data: {json.dumps(invoice_data)}
 
