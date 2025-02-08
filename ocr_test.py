@@ -216,7 +216,7 @@ def ocr_results_to_json(results):
     
     return json.dumps(data, indent=4)
 
-st.title("Surya OCR Application")
+st.title("KSA OCR Application")
 
 # Odoo configurations
 ODOO_URL = 'https://students8.odoo.com/'
