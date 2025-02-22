@@ -496,9 +496,11 @@ def organize_invoice_data(invoice_data):
             }
         }
     }"""
-
+    
+    defaultValues = """invoice_number:1"""
+    
     prompt = f"""
-    Organize the following invoice data into a structured format and date formate should be dd/mm/yyyy like this {json_template} also check for data types and return only json do not add ''' and json:
+    Organize this html {invoice_data} invoice data into a structured format default value for {defaultValues} and date formate should be dd/mm/yyyy like this {json_template} also check for data types and return only json do not add ''' and json:
     
     Invoice Data: {json.dumps(invoice_data)}
 
@@ -552,8 +554,142 @@ languages = st.sidebar.multiselect(
 if not in_files:
     st.stop()
 
+def generate_html_from_json(data, output_html_file):
+    # Ensure the directory exists
+    output_dir = os.path.dirname(output_html_file)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # HTML structure
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Generated HTML</title>
+        <style>
+            body {
+                font-family: 'Noto Naskh Arabic', sans-serif;
+                direction: rtl;
+                position: relative;
+                margin: 0;
+                padding: 0;
+                width: 794px;
+                height: 1123px;
+            }
+            .text-line {
+                position: absolute;
+                color: black;
+            }
+        </style>
+    </head>
+    <body>
+    """
+
+    # Iterate over each text line and generate HTML
+    for text_line in data.text_lines:  # Access text_lines using dot notation
+        # Assuming text_line is a tuple: (text, polygon)
+        text = text_line[0]  # First element is the text
+        polygon = text_line[1]  # Second element is the polygon
+
+        x_min = min(point[0] for point in polygon)
+        y_min = min(point[1] for point in polygon)
+
+        html_content += f"""
+        <div class="text-line" style="left: {x_min}px; top: {y_min}px; font-size: 14px;">
+            {text}
+        </div>
+        """
+
+    html_content += """
+    </body>
+    </html>
+    """
+
+    # Save the HTML to a file
+    with open(output_html_file, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+    
+    print(f"HTML file successfully saved: {output_html_file}")
+
+class OCRResult:
+    def __init__(self, text_lines):
+        self.text_lines = text_lines
+
+class TextLine:
+    def __init__(self, text, polygon):
+        self.text = text
+        self.polygon = polygon
+
 # Buttons for different processing tasks
 text_rec = st.sidebar.button("Run OCR")
+
+def generate_html_from_text_lines(text_lines, output_file="output.html"):
+    # Start the HTML document
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Generated HTML from Text Lines</title>
+        <style>
+            body {
+                position: relative;
+                width: 794px;
+                height: 1123px;
+                margin: 0;
+                padding: 0;
+                background-color: white;
+                font-family: Arial, sans-serif;
+            }
+            .text-line {
+                position: absolute;
+                white-space: nowrap;
+                font-size: 12px;
+            }
+            .text-line.ar {
+                direction: rtl;
+                unicode-bidi: bidi-override;
+            }
+        </style>
+    </head>
+    <body>
+    """
+
+    # Iterate over each text line and create HTML elements
+    for text_line in text_lines:
+        bbox = text_line.bbox  # Extract bounding box coordinates
+        text = text_line.text  # Extract text content
+        lang = "ar" if any(char in text for char in "ﺍﺏﺕﺙﺝﺡﺥﺩﺫﺭﺯﺱﺵﺹﺽﻁﻅﻉﻍﻑﻕﻙﻝﻡﻥﻩﻭﻱ") else "en"  # Detect language
+
+        # Create a div for each text line
+        html_content += f"""
+        <div class="text-line {lang}" style="left: {bbox[0]}px; top: {bbox[1]}px; width: {bbox[2] - bbox[0]}px; height: {bbox[3] - bbox[1]}px;">
+            {text}
+        </div>
+        """
+
+    # Close the HTML document
+    html_content += """
+    </body>
+    </html>
+    """
+
+    # Write the HTML content to a file
+    with open(output_file, "w", encoding="utf-8") as file:
+        file.write(html_content)
+
+        # Organize the extracted text using Gemini API
+    gemini_result = organize_invoice_data(html_content)
+    if "error" in gemini_result:
+        st.error(f"Error: {gemini_result['error']}")
+    else:
+        return gemini_result['organized_data']
+    
+    print(f"HTML file generated successfully: {output_file}")
+
 
 if text_rec:  # Only run when 'Run OCR' button is clicked
     # Process uploaded files
@@ -583,20 +719,24 @@ if text_rec:  # Only run when 'Run OCR' button is clicked
                 st.json(gemini_result['organized_data'])
         else:
             if result.get("ocr"):
-                st.subheader("OCR")
-                for line in result["ocr"].text_lines:
-                    st.text(line.text)
+                text_lines = result["ocr"]
+                st.subheader("Organized Data")
+                ocr_result = OCRResult(text_lines = text_lines)
+                result = generate_html_from_text_lines(result["ocr"].text_lines)
+                dump_to_odoo(result)
                 
+                st.json(result["ocr"].text_lines)
                 # Combine OCR text for organizing
-                combined_ocr_text = "\n".join(line.text for line in result["ocr"].text_lines)
+                # combined_ocr_text = "\n".join(line.text for line in result["ocr"].text_lines)
                 
-                # Organize the OCR text using Gemini API
-                gemini_result = organize_invoice_data(combined_ocr_text)
-                if "error" in gemini_result:
-                    st.error(f"Error: {gemini_result['error']}")
-                else:
-                    st.subheader("Organized Data")
-                    st.json(gemini_result['organized_data'])
+                # # Organize the OCR text using Gemini API
+                # # gemini_result = organize_invoice_data(combined_ocr_text)
+                # if "error" in gemini_result:
+                #     st.error(f"Error: {gemini_result['error']}")
+                # else:
+                #     # dump_to_odoo(gemini_result['organized_data'])
+                #     st.subheader("Organized Data")
+                #     st.json(result["ocr"])
 
 
 
